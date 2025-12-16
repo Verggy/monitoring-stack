@@ -1,0 +1,11 @@
+# # config file version
+apiVersion: 1
+
+providers:
+  - name: "Node Exporter"
+    orgId: 1
+    folder: ""
+    folderUid: ""
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards/node_exporter_full.json

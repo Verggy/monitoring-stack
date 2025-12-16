@@ -1,0 +1,130 @@
+version: "3"
+name: monitoring
+
+networks:
+  monitoring_net:
+    name: monitoring_net
+    driver: bridge
+
+volumes:
+  loki_storage:
+  prometheus_storage:
+
+services:
+  grafana:
+    image: grafana/grafana-oss:12.2.0-17142428006
+    container_name: grafana
+    restart: unless-stopped
+    env_file: ./env/grafana.env
+    user: "472"
+    networks:
+      - monitoring_net
+    ports:
+      - "3000:3000"
+    volumes:
+      - "./config/grafana.ini:/etc/grafana/grafana.ini"
+      - "./data/grafana:/var/lib/grafana"
+      - "./provisioning/grafana:/etc/grafana/provisioning"
+
+  prometheus:
+    image: prom/prometheus:v3.7.3
+    container_name: prometheus
+    restart: unless-stopped
+    env_file: ./env/prometheus.env
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+    networks:
+      - monitoring_net
+    ports:
+      - "9090:9090"
+    volumes:
+      - "./config/prometheus.yml:/etc/prometheus/prometheus.yml"
+      - "prometheus_storage:/prometheus"
+
+  node-exporter:
+    image: quay.io/prometheus/node-exporter:v1.10.2
+    container_name: node_exporter
+    hostname: node_exporter
+    volumes:
+      - "/proc:/host/proc:ro"
+      - "/sys:/host/sys:ro"
+      - "/:/rootfs:ro"
+      - "/:/host:ro,rslave"
+    networks:
+      - monitoring_net
+    ports:
+      - 9100:9100
+    pid: host
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--collector.filesystem.ignored-mount-points"
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+      - "--collector.cpu"
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.0
+    hostname: cadvisor
+    container_name: cadvisor
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - "/dev/kmsg:/dev/kmsg"
+    platform: linux/amd64
+    volumes:
+      - "/:/rootfs:ro"
+      - "/var/run:/var/run:ro"
+      - "/sys:/sys:ro"
+      - "/var/lib/docker/:/var/lib/docker:ro"
+      - "/dev/disk/:/dev/disk:ro"
+      - "/etc/timezone:/etc/timezone:ro"
+      - "/etc/localtime:/etc/localtime:ro"
+
+    networks:
+      - monitoring_net
+    ports:
+      - "8080:8080"
+
+  loki:
+    image: grafana/loki:main-ee58c33
+    hostname: loki
+    container_name: loki
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/loki/loki-config.yaml"
+      - "-target=all"
+    networks:
+      - monitoring_net
+    ports:
+      - "3100:3100"
+    volumes:
+      - "./config/loki-config.yaml:/etc/loki/loki-config.yaml"
+      - "loki_storage:/loki"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3100/metrics"]
+      interval: 30s
+      retries: 3
+
+  promtail:
+    image: grafana/promtail:main-ee58c33
+    hostname: promtail
+    container_name: promtail
+    restart: unless-stopped
+    command:
+      - "-config.file=/etc/promtail/promtail-config.yaml"
+    networks:
+      - monitoring_net
+    ports:
+      - "9080:9080"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+      - "./config/promtail-config.yaml:/etc/promtail/promtail-config.yaml"
+      - "./data/promtail:/var/lib/promtail"
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9080/metrics"]
+      interval: 30s
+      retries: 3
