@@ -9,3 +9,11 @@ providers:
     type: file
     options:
       path: /etc/grafana/provisioning/dashboards/node_exporter_full.json
+
+  - name: "cAdvisor dashboard"
+    orgId: 1
+    folder: ""
+    folderUid: ""
+    type: file
+    options:
+      path: /etc/grafana/provisioning/dashboards/y0neis_cadvisor_dashboard.json
